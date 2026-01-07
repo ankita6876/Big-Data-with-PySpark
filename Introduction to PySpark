@@ -8,6 +8,242 @@ my_spark = SparkSession.builder.appName("my_spark").getOrCreate()
 # Print my_spark
 print(my_spark)
 
+#Loading census data
+# Read in the CSV
+census_adult = spark.read.csv("adult_reduced.csv", header=True, inferSchema=True)
 
+# Show the DataFrame
+census_adult.show()
+
+#Reading a CSV and performing aggregations
+# Load the CSV file into a DataFrame
+salaries_df = spark.read.csv("salaries.csv", header=True, inferSchema=True)
+
+# Count the total number of rows
+row_count = salaries_df.count()
+print(f"Total rows: {row_count}")
+
+# Group by company size and calculate the average of salaries
+salaries_df.groupBy("company_size").agg({"salary_in_usd": "avg"}).show()
+salaries_df.show()
+
+#Filtering by company
+# Average salary for entry level in Canada
+CA_jobs = ca_salaries_df.filter(ca_salaries_df["company_location"] == "CA").filter(
+    ca_salaries_df['experience_level'] == "EN"
+).groupBy().avg("salary_in_usd")
+
+# Show the result
+CA_jobs.show()
+
+
+#Infer and filter
+# Load the dataframe
+census_df = spark.read.json("adults.json")
+
+# Filter rows based on age condition
+salary_filtered_census = census_df.filter(census_df["age"] > 40)
+
+# Show the result
+salary_filtered_census.show()
+
+
+#Schema writeout
+from pyspark.sql.types import StructType, StructField, IntegerType, StringType
+
+# Fill in the schema with the columns you need from the exercise instructions
+schema = StructType([StructField("age", IntegerType()),
+                     StructField("education_num", IntegerType()),
+                     StructField("marital_status", StringType()),
+                     StructField("occupation", StringType()),
+                     StructField("income", StringType()),
+                    ])
+
+# Read in the CSV, using the schema you defined above
+census_adult = spark.read.csv("adult_reduced_100.csv", sep=',', header=False, schema=schema)
+
+# Print out the schema
+census_adult.printSchema()
+
+#Handling missing data with fill and drop
+# Drop rows with any nulls
+census_cleaned = census_df.na.drop()
+
+# Show the result
+census_cleaned.show()
+
+
+#Column operations - creating and renaming columns
+# Create a new column 'weekly_salary'
+census_df_weekly = census_df.withColumn("weekly_salary", census_df.income / 52)
+
+# Rename the 'age' column to 'years'
+census_df_weekly = census_df_weekly.withColumnRenamed("age", "years")
+
+# Show the result
+census_df_weekly.show()
+
+#Joining flights with their destination airports
+
+# Examine the data
+airports.show()
+
+# .withColumnRenamed() renames the "faa" column to "dest"
+airports = airports.withColumnRenamed("faa", "dest")
+
+# Join the DataFrames
+flights_with_airports = flights.join(airports, "dest", how="leftouter")
+
+# Examine the new DataFrame
+flights_with_airports.show()
+
+#Integers in PySpark UDFs
+# Register the function age_category as a UDF
+age_category_udf = udf(age_category, StringType())
+
+# Apply your udf to the DataFrame
+age_category_df_2 = age_category_df.withColumn("category", age_category_udf(age_category_df["age"]))
+
+# Show df
+age_category_df_2.show()
+
+
+#Pandas UDFs
+# Define a Pandas UDF that adds 10 to each element in a vectorized way
+@pandas_udf(DoubleType())
+def add_ten_pandas(column):
+    return column + 10
+
+# Apply the UDF and show the result
+df.withColumn("10_plus", add_ten_pandas(df["value"]))
+df.show()
+
+#Creating RDDs
+# Create a DataFrame
+df = spark.read.csv("salaries.csv", header=True, inferSchema=True)
+
+# Convert DataFrame to RDD
+rdd = df.rdd
+
+# Show the RDD's contents
+rdd.collect()
+print(rdd)
+# Create an RDD from the df_salaries
+rdd_salaries = df_salaries.rdd
+
+# Collect and print the results
+print(rdd_salaries.collect())
+
+# Group by the experience level and calculate the maximum salary
+dataframe_results = df_salaries.groupby("experience_level").agg({"salary_in_usd": "max"})
+
+# Show the results
+dataframe_results.show()
+
+
+#Querying on a temp view
+# Register as a view
+df.createOrReplaceTempView("data_view")
+
+# Advanced SQL query: Calculate total salary by Position
+result = spark.sql("""
+    SELECT Position, SUM(Salary) AS Total_Salary
+    FROM data_view
+    GROUP BY Position
+    ORDER BY Total_Salary DESC
+    """
+)
+result.show()
+
+#Running SQL on DataFrames
+# Create a temporary table "people"
+df.createOrReplaceTempView("people")
+
+# Select the names from the temporary table people
+query = """SELECT name FROM people"""
+
+# Assign the result of Spark's query to people_df_names
+people_df_names = spark.sql(query)
+
+# Print the top 10 names of the people
+people_df_names.show(10)
+
+
+#Analytics with SQL on DataFrames
+# Create a temporary view of salaries_table
+salaries_df.createOrReplaceTempView('salaries_table')
+
+# Construct the "query"
+query = '''SELECT job_title, salary_in_usd FROM salaries_table WHERE company_location = "CA"'''
+
+# Apply the SQL "query"
+canada_titles = spark.sql(query)
+
+# Generate basic statistics
+canada_titles.describe().show()
+
+#Aggregating in PySpark
+# Find the minimum salaries for small companies
+salaries_df.filter(salaries_df.company_size == "S").groupBy().min("salary_in_usd").show()
+
+# Find the maximum salaries for large companies
+salaries_df.filter(salaries_df.company_size == "L").groupBy().max("salary_in_usd").show()
+
+
+#Aggregating in RDDs
+# DataFrame Creation
+data = [("HR", "3000"), ("IT", "4000"), ("Finance", "3500")]
+columns = ["Department", "Salary"]
+df = spark.createDataFrame(data, schema=columns)
+
+# Map the DataFrame to an RDD
+rdd = df.rdd.map(lambda row: (row["Department"], row["Salary"]))
+
+# Apply a lambda function to get the sum of the DataFrame
+rdd_aggregated = rdd.reduceByKey(lambda x, y: x + y)
+
+# Show the collected Results
+print(rdd_aggregated.collect())
+
+#Complex Aggregations
+# Average salaries at large us companies
+large_companies = salaries_df.filter(salaries_df.company_size == "L") \
+    .filter(salaries_df.company_location == "US") \
+    .groupBy().avg("salary_in_usd")
+
+# set a large companies variable for other analytics
+large_companies = salaries_df.filter(salaries_df.company_size == "L") \
+    .filter(salaries_df.company_location == "US")
+
+# Total salaries in usd
+large_companies.groupBy().sum("salary_in_usd").show()
+
+#Bringing it all together I
+
+# Import SparkSession from pyspark.sql
+from pyspark.sql import SparkSession
+
+# Create my_spark
+my_spark = SparkSession.builder.appName("final_spark").getOrCreate()
+
+# Print my_spark
+print(my_spark)
+
+# Load dataset into a DataFrame
+df = my_spark.createDataFrame(data, schema=columns)
+
+df.show()
+# Cache the DataFrame
+df.cache()
+
+# Perform aggregation
+agg_result = df.groupBy("Department").sum("Salary")
+agg_result.show()
+
+# Analyze the execution plan
+agg_result.explain()
+
+# Uncache the DataFrame
+df.unpersist()
 
  
